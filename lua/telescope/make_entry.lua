@@ -538,33 +538,16 @@ function make_entry.gen_from_lsp_symbols(opts)
 
   local make_display = function(entry)
     local msg
-    local hierarchy
 
     if opts.show_line then
       msg = vim.trim(vim.F.if_nil(vim.api.nvim_buf_get_lines(bufnr, entry.lnum - 1, entry.lnum, false)[1], ""))
     end
 
-    local build_hierarchy = function(_entry)
-      if _entry.symbol_parent then
-        local ret = _entry.symbol_parent.name
-        local curr = _entry.symbol_parent
-        while curr.parent do
-          ret = curr.parent.name .. "." .. ret
-          curr = curr.parent
-        end
-        return ret
-      end
-
-      return ""
-    end
-
-    hierarchy = build_hierarchy(entry)
-
     if hidden then
       return displayer {
         entry.symbol_name,
         { entry.symbol_type:lower(), type_highlight[entry.symbol_type] },
-        hierarchy,
+        entry.symbol_hierarchy,
         msg,
       }
     else
@@ -572,7 +555,7 @@ function make_entry.gen_from_lsp_symbols(opts)
         utils.transform_path(opts, entry.filename),
         entry.symbol_name,
         { entry.symbol_type:lower(), type_highlight[entry.symbol_type] },
-        hierarchy,
+        entry.symbol_hierarchy,
         msg,
       }
     end
@@ -582,7 +565,12 @@ function make_entry.gen_from_lsp_symbols(opts)
   return function(entry)
     local filename = vim.F.if_nil(entry.filename, get_filename(entry.bufnr))
     local symbol_msg = entry.text
-    local symbol_type, symbol_name = symbol_msg:match "%[(.+)%]%s+(.*)"
+    vim.api.nvim_out_write(symbol_msg .. "\n")
+    local symbol_type, rest = symbol_msg:match "%[(.+)%]%s+(.*)"
+    local symbol_name, symbol_hierarchy = rest:match("(.*)%s+-%s(.*)")
+    if not symbol_name then
+      symbol_name = rest
+    end
     local ordinal = ""
     if not hidden and filename then
       ordinal = filename .. " "
@@ -598,7 +586,7 @@ function make_entry.gen_from_lsp_symbols(opts)
       col = entry.col,
       symbol_name = symbol_name,
       symbol_type = symbol_type,
-      symbol_parent = entry.parent,
+      symbol_hierarchy = symbol_hierarchy,
       start = entry.start,
       finish = entry.finish,
     }, opts)

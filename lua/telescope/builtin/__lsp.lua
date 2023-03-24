@@ -261,6 +261,33 @@ end
 
 
 local ply_tst = function(symbols, bufnr)
+  local build_hierarchy = function(parent)
+    if parent then
+      local ret = ""
+      local curr = parent
+
+      while curr.parent do
+        local symbol = curr.symbol
+        local kind = vim.lsp.util._get_symbol_kind_name(symbol.kind)
+        if kind == "File" or kind == "Module" or kind == "Namespace" or kind == "Package" or kind == "Class" then
+          if ret == "" then
+            ret = symbol.name
+          else
+            ret = symbol.name .. "." .. ret
+          end
+        end
+        curr = curr.parent
+      end
+
+      if ret == "" then
+        return ""
+      else
+        return " - " .. ret
+      end
+    end
+    return ""
+  end
+
   local function _symbols_to_items(_symbols, _items, _bufnr, _parent)
     for _, symbol in ipairs(_symbols) do
       if symbol.location then -- SymbolInformation type
@@ -281,12 +308,10 @@ local ply_tst = function(symbols, bufnr)
           lnum = symbol.selectionRange.start.line + 1,
           col = symbol.selectionRange.start.character + 1,
           kind = kind,
-          text = '[' .. kind .. '] ' .. symbol.name,
-          children = symbol.children,
-          parent = _parent,
+          text = '[' .. kind .. '] ' .. symbol.name .. build_hierarchy(_parent),
         })
         if symbol.children then
-          for _, v in ipairs(_symbols_to_items(symbol.children, _items, _bufnr, symbol)) do
+          for _, v in ipairs(_symbols_to_items(symbol.children, _items, _bufnr, { symbol = symbol, parent = _parent})) do
             for _, s in ipairs(v) do
               table.insert(_items, s)
             end
