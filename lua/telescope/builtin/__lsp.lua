@@ -259,6 +259,47 @@ local symbols_sorter = function(symbols)
   return symbols
 end
 
+
+local ply_tst = function(symbols, bufnr)
+  local function _symbols_to_items(_symbols, _items, _bufnr, _parent)
+    for _, symbol in ipairs(_symbols) do
+      if symbol.location then -- SymbolInformation type
+        local range = symbol.location.range
+        local kind =  vim.lsp.util._get_symbol_kind_name(symbol.kind)
+        table.insert(_items, {
+          filename = vim.uri_to_fname(symbol.location.uri),
+          lnum = range.start.line + 1,
+          col = range.start.character + 1,
+          kind = kind,
+          text = '[' .. kind .. '] ' .. symbol.name,
+        })
+      elseif symbol.selectionRange then -- DocumentSymbole type
+        local kind = vim.lsp.util._get_symbol_kind_name(symbol.kind)
+        table.insert(_items, {
+          -- bufnr = _bufnr,
+          filename = vim.api.nvim_buf_get_name(_bufnr),
+          lnum = symbol.selectionRange.start.line + 1,
+          col = symbol.selectionRange.start.character + 1,
+          kind = kind,
+          text = '[' .. kind .. '] ' .. symbol.name,
+          children = symbol.children,
+          parent = _parent,
+        })
+        if symbol.children then
+          for _, v in ipairs(_symbols_to_items(symbol.children, _items, _bufnr, symbol)) do
+            for _, s in ipairs(v) do
+              table.insert(_items, s)
+            end
+          end
+        end
+      end
+    end
+    return _items
+  end
+  return _symbols_to_items(symbols, {}, bufnr or 0, nil)
+end
+
+
 lsp.document_symbols = function(opts)
   local params = vim.lsp.util.make_position_params(opts.winnr)
   vim.lsp.buf_request(opts.bufnr, "textDocument/documentSymbol", params, function(err, result, _, _)
@@ -275,7 +316,8 @@ lsp.document_symbols = function(opts)
       return
     end
 
-    local locations = vim.lsp.util.symbols_to_items(result or {}, opts.bufnr) or {}
+    --local locations = vim.lsp.util.symbols_to_items(result or {}, opts.bufnr) or {}
+    local locations = ply_tst(result or {}, opts.bufnr) or {}
     locations = utils.filter_symbols(locations, opts, symbols_sorter)
     if locations == nil then
       -- error message already printed in `utils.filter_symbols`
@@ -285,7 +327,7 @@ lsp.document_symbols = function(opts)
     if vim.tbl_isempty(locations) then
       utils.notify("builtin.lsp_document_symbols", {
         msg = "No document_symbol locations found",
-        level = "INFO",
+        levl = "INFO",
       })
       return
     end
